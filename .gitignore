@@ -1,0 +1,5 @@
+.idea/**
+examples/**
+venv/**
+tricky-examples/**
+*.egg-info/**
