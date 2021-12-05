@@ -1,41 +1,44 @@
 import abc
 import functools
 import re
+from dataclasses import dataclass
 from typing import Dict
 
-from insurancedb.extractor_methods import get_date, clean_text, diff_months, get_car_number
+import pdfplumber
+
+from insurancedb.extractor_methods import get_date, clean_text, get_car_number, is_RCA
 
 
 class BaseRcaExtractor(abc.ABC):
 
-    def get_expiration_date(self, text: str):
+    def get_expiration_date(self):
         pass
 
-    def get_start_date(self, text):
+    def get_start_date(self):
         pass
 
-    def get_insurance_number(self, text: str):
+    def get_insurance_number(self):
         pass
 
-    def get_person_name(self, text: str):
+    def get_person_name(self):
         pass
 
-    def get_insurance_amount(self, text: str):
+    def get_insurance_amount(self):
         pass
 
-    def get_insurance_class(self, text: str):
+    def get_insurance_class(self):
         pass
 
-    def get_contract_date(self, text):
+    def get_contract_date(self):
         pass
 
-    def get_insurer_name(self, text: str):
+    def get_insurer_name(self):
         pass
 
-    def is_match(self, text: str):
+    def is_match(self):
         pass
 
-    def get_car_number(self, text: str):
+    def get_car_number(self):
         pass
 
     def get_insurer_short_name(self):
@@ -45,11 +48,11 @@ class BaseRcaExtractor(abc.ABC):
         return "RCA"
 
 
-registry_map: Dict[str, BaseRcaExtractor] = {}
+registry_map: Dict[str, BaseRcaExtractor.__class__] = {}
 
 
 def register(cls):
-    registry_map[cls.__name__.lower()] = cls()
+    registry_map[cls.__name__.lower()] = cls
     return cls
 
 
@@ -57,47 +60,53 @@ extractor_register = functools.partial(register)
 
 
 @extractor_register
+@dataclass
 class EuroInsRcaExtractor(BaseRcaExtractor):
+    pdf: pdfplumber.PDF = None
 
-    def get_expiration_date(self, text: str):
-        return get_date(text, r'până la:(.*)\.(.*)\.(.*) Contract')
+    def __post_init__(self):
+        first_page = self.pdf.pages[0]
+        self.text = first_page.extract_text()
 
-    def get_start_date(self, text):
-        return get_date(text, r'Contract de la(.*)\.(.*)\.(.*)până la')
+    def get_expiration_date(self):
+        return get_date(self.text, r'până la:(.*)\.(.*)\.(.*) Contract')
 
-    def get_insurance_number(self, text: str):
-        match = re.search(r'Seria(.*)Nr\.(.*)', text)
+    def get_start_date(self):
+        return get_date(self.text, r'Contract de la(.*)\.(.*)\.(.*)până la')
+
+    def get_insurance_number(self):
+        match = re.search(r'Seria(.*)Nr\.(.*)', self.text)
         if match:
             return match.group(2).strip()
         else:
             return None
 
-    def get_person_name(self, text: str):
-        match = re.search(r'Nume/Denumire Asigurat/(.*)Fel, Tip, Marca', text)
+    def get_person_name(self):
+        match = re.search(r'Nume/Denumire Asigurat/(.*)Fel, Tip, Marca', self.text)
         if match:
             return match.group(1).strip()
         else:
             return None
 
-    def get_insurance_amount(self, text: str):
-        match = re.search(r'Prima de asigurare:(.*)Lei,', text)
+    def get_insurance_amount(self, ):
+        match = re.search(r'Prima de asigurare:(.*)Lei,', self.text)
         if match:
             return clean_text(match.group(1))
         else:
             return None
 
-    def get_insurance_class(self, text: str):
-        match = re.search(r'Clasa Bonus-Malus:(.*),  Tarif de decontare', text)
+    def get_insurance_class(self):
+        match = re.search(r'Clasa Bonus-Malus:(.*),  Tarif de decontare', self.text)
         if match:
             return clean_text(match.group(1))
         else:
             return None
 
-    def get_contract_date(self, text: str):
-        return get_date(text, r'Contract emis în data de:(.*)\.(.*)\.(.*) (.*):')
+    def get_contract_date(self):
+        return get_date(self.text, r'Contract emis în data de:(.*)\.(.*)\.(.*) (.*):')
 
-    def get_insurer_name(self, text: str):
-        match = re.search(r'(EUROINS.*)R.C', text)
+    def get_insurer_name(self):
+        match = re.search(r'(EUROINS.*)R.C', self.text)
         if match:
             return clean_text(match.group(1))
         else:
@@ -106,55 +115,62 @@ class EuroInsRcaExtractor(BaseRcaExtractor):
     def get_insurer_short_name(self):
         return "EUROINS"
 
-    def is_match(self, text: str):
-        return self.get_insurer_name(text) == "EUROINS ROMÂNIA ASIGURARE REASIGURARE S.A."
+    def is_match(self):
+        is_rca = is_RCA(self.text)
+        return is_rca and self.get_insurer_name() == "EUROINS ROMÂNIA ASIGURARE REASIGURARE S.A."
 
-    def get_car_number(self, text: str):
-        return get_car_number(text)
+    def get_car_number(self):
+        return get_car_number(self.text)
 
 
+@dataclass
 @extractor_register
 class CityInsuranceRcaExtractor(BaseRcaExtractor):
+    pdf: pdfplumber.PDF = None
 
-    def get_expiration_date(self, text: str):
-        return get_date(text, r'pana la(.*)/(.*)/(.*)Contract')
+    def __post_init__(self):
+        first_page = self.pdf.pages[0]
+        self.text = first_page.extract_text()
 
-    def get_start_date(self, text):
-        return get_date(text, r'Valabilitate Contract de la(.*)/(.*)/(.*)pana la')
+    def get_expiration_date(self):
+        return get_date(self.text, r'pana la(.*)/(.*)/(.*)Contract')
 
-    def get_insurance_number(self, text: str):
-        match = re.search(r'Seria(.*)Nr\.(.*)', text)
+    def get_start_date(self):
+        return get_date(self.text, r'Valabilitate Contract de la(.*)/(.*)/(.*)pana la')
+
+    def get_insurance_number(self):
+        match = re.search(r'Seria(.*)Nr\.(.*)', self.text)
         if match:
             return match.group(2).strip()
         else:
             return None
 
-    def get_person_name(self, text: str):
-        match = re.search(r'Nume/Denumire Asigurat Fel, Tip, Marca.*[\r\n]+([^\r\n]+)', text)
+    def get_person_name(self):
+        match = re.search(r'Nume/Denumire Asigurat Fel, Tip, Marca.*[\r\n]+([^\r\n]+)', self.text)
         if match:
             return match.group(1).strip()
         else:
             return None
 
-    def get_insurance_amount(self, text: str):
-        match = re.search(r'Prima totala(.*)Lei', text)
+    def get_insurance_amount(self):
+        match = re.search(r'Prima totala(.*)Lei', self.text)
         if match:
             return clean_text(match.group(1))
         else:
             return None
 
-    def get_insurance_class(self, text: str):
-        match = re.search(r'Clasa Bonus-Malus(.*)', text)
+    def get_insurance_class(self):
+        match = re.search(r'Clasa Bonus-Malus(.*)', self.text)
         if match:
             return clean_text(match.group(1))
         else:
             return None
 
-    def get_contract_date(self, text: str):
-        return get_date(text, r'Contract emis in data de(.*)/(.*)/(.*), ora')
+    def get_contract_date(self):
+        return get_date(self.text, r'Contract emis in data de(.*)/(.*)/(.*), ora')
 
-    def get_insurer_name(self, text: str):
-        match = re.search(r'DENUMIRE ASIGURATOR:(.*)R.C', text)
+    def get_insurer_name(self):
+        match = re.search(r'DENUMIRE ASIGURATOR:(.*)R.C', self.text)
         if match:
             return clean_text(match.group(1))
         else:
@@ -163,13 +179,140 @@ class CityInsuranceRcaExtractor(BaseRcaExtractor):
     def get_insurer_short_name(self):
         return "CITY"
 
-    def get_insurance_interval(self, text: str):
-        exp = self.get_expiration_date(text)
-        start = self.get_start_date(text)
-        return diff_months(exp, start)
+    def is_match(self):
+        is_rca = is_RCA(self.text)
+        return is_rca and self.get_insurer_name() == "CITY INSURANCE S.A."
 
-    def is_match(self, text: str):
-        return self.get_insurer_name(text) == "CITY INSURANCE S.A."
+    def get_car_number(self):
+        return get_car_number(self.text)
 
-    def get_car_number(self, text: str):
-        return get_car_number(text)
+
+@dataclass
+@extractor_register
+class GraweRcaExtractor(BaseRcaExtractor):
+    pdf: pdfplumber.PDF = None
+
+    def __post_init__(self):
+        first_page = self.pdf.pages[0]
+        self.text = first_page.extract_text()
+
+    def get_expiration_date(self):
+        return get_date(self.text, r'până la(.*)\.(.*)\.(.*)Contract')
+
+    def get_start_date(self):
+
+        return get_date(self.text, r'Valabilitate Contract de la(.*)\.(.*)\.(.*)până la')
+
+    def get_insurance_number(self):
+        match = re.search(r'Seria(.*)Nr\.(.*)', self.text)
+        if match:
+            return match.group(2).strip()
+        else:
+            return None
+
+    def get_person_name(self):
+        match = re.search(r'Nume/Denumire Asigurat:(.*)Fel, Tip, Marcă', self.text)
+        if match:
+            return match.group(1).strip()
+        else:
+            return None
+
+    def get_insurance_amount(self):
+        match = re.search(r'Primă de asigurare(.*)Lei', self.text)
+        if match:
+            return clean_text(match.group(1))
+        else:
+            return None
+
+    def get_insurance_class(self):
+        match = re.search(r'Clasă Bonus-Malus(.*)', self.text)
+        if match:
+            return clean_text(match.group(1))
+        else:
+            return None
+
+    def get_contract_date(self):
+        return get_date(self.text, r'Contract emis în data de(.*)\.(.*)\.(.*)')
+
+    def get_insurer_name(self):
+        match = re.search(r'(GRAWE.*)R.C', self.text)
+        if match:
+            return clean_text(match.group(1))
+        else:
+            return None
+
+    def get_insurer_short_name(self):
+        return "GRAWE"
+
+    def is_match(self):
+        is_rca = is_RCA(self.text)
+        return is_rca and self.get_insurer_name() == "GRAWE România Asigurare SA"
+
+    def get_car_number(self):
+        return get_car_number(self.text)
+
+
+@dataclass
+@extractor_register
+class GroupamaRcaExtractor(BaseRcaExtractor):
+    pdf: pdfplumber.PDF = None
+
+    def __post_init__(self):
+        first_page = self.pdf.pages[0]
+        self.text = first_page.extract_text()
+
+    def get_expiration_date(self):
+        return get_date(self.text, r'până la(.*)\.(.*)\.(.*)Contract')
+
+    def get_start_date(self):
+
+        return get_date(self.text, r'Valabilitate Contract de la(.*)\.(.*)\.(.*)până la')
+
+    def get_insurance_number(self):
+        match = re.search(r'Seria(.*)Nr\.(.*)', self.text)
+        if match:
+            return match.group(2).strip()
+        else:
+            return None
+
+    def get_person_name(self):
+        match = re.search(r'Nume / Denumire(.*)Fel, Tip, Marcă', self.text)
+        if match:
+            return match.group(1).strip()
+        else:
+            return None
+
+    def get_insurance_amount(self):
+        match = re.search(r'Prima de asigurare(.*)LEI', self.text)
+        if match:
+            return clean_text(match.group(1))
+        else:
+            return None
+
+    def get_insurance_class(self):
+        match = re.search(r'Clasă Bonus-Malus:(.*)', self.text)
+        if match:
+            return clean_text(match.group(1))
+        else:
+            return None
+
+    def get_contract_date(self):
+        return get_date(self.text, r'Contract emis în data de(.*)\.(.*)\.(.*)')
+
+    def get_insurer_name(self):
+        match = re.search(r'(GROUPAMA.*)Tel\.', self.text)
+        if match:
+            return clean_text(match.group(1))
+        else:
+            return None
+
+    def get_insurer_short_name(self):
+        return "GROUPAMA"
+
+    def is_match(self):
+        is_rca = is_RCA(self.text)
+        return is_rca and self.get_insurer_name() == "GROUPAMA ASIGURĂRI S.A."
+
+    def get_car_number(self):
+        return get_car_number(self.text)
+

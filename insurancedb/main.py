@@ -1,7 +1,7 @@
-import logging
 import pathlib
-import sys
+from multiprocessing import Pool, cpu_count, current_process
 from pathlib import Path
+from typing import List
 
 import click
 import pandas as pd
@@ -10,34 +10,78 @@ import pdfplumber
 from insurancedb.extractor import registry_map
 from insurancedb.extractor_methods import diff_months
 
-def config_console_log():
-    log_formatter = logging.Formatter(
-        "%(asctime)s [%(threadName)-12.12s] [%(name)-20.20s] [%(levelname)-5.5s]  %(message)s")
-    root_logger = logging.getLogger()
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(log_formatter)
-    root_logger.addHandler(console_handler)
-    root_logger.setLevel(logging.INFO)
-    logging.getLogger("pdfminer").setLevel(logging.WARNING)
+
+# this does not work wit parallel processing
+# def config_console_log():
+#     log_formatter = logging.Formatter(
+#         "%(asctime)s [%(threadName)-12.12s] [%(name)-20.20s] [%(levelname)-5.5s]  %(message)s")
+#     root_logger = logging.getLogger()
+#     console_handler = logging.StreamHandler(sys.stdout)
+#     console_handler.setFormatter(log_formatter)
+#     root_logger.addHandler(console_handler)
+#     root_logger.setLevel(logging.INFO)
+#     logging.getLogger("pdfminer").setLevel(logging.WARNING)
+
+
+def chunk_even_groups(lst, n_groups):
+    approx_sizes = len(lst) / n_groups
+    for i in range(n_groups):
+        yield lst[int(i * approx_sizes):int((i + 1) * approx_sizes)]
+
 
 @click.command()
 @click.option('--pdfs_dir', type=click.Path(path_type=pathlib.Path))
 @click.option('--out_dir', type=click.Path(path_type=pathlib.Path), required=False)
 def create_db(pdfs_dir: Path, out_dir: Path):
-    config_console_log()
-    logger = logging.getLogger(__name__)
     if out_dir is None:
         out_dir = pdfs_dir
 
-    data = []
-    for pdf_path in sorted(pdfs_dir.glob("*.pdf")):
-        with pdfplumber.open(pdf_path) as pdf:
-            logger.info("Processing file: %s", str(pdf_path))
-            first_page = pdf.pages[0]
-            text = first_page.extract_text()
+    paths = list(pdfs_dir.glob("*.pdf"))
+    data = process_paths(paths)
 
-            for extractor_key, extractor in registry_map.items():
-                if extractor.is_match(text):
+    save_data(data, out_dir)
+
+
+@click.command()
+@click.option('--pdfs_dir', type=click.Path(path_type=pathlib.Path))
+@click.option('--out_dir', type=click.Path(path_type=pathlib.Path), required=False)
+def create_db_parallel(pdfs_dir: Path, out_dir: Path):
+    if out_dir is None:
+        out_dir = pdfs_dir
+
+    paths = list(pdfs_dir.glob("*.pdf"))
+    paths_chunked = list(chunk_even_groups(paths, cpu_count()))
+
+    with Pool(cpu_count()) as pool:
+        data_parallel = pool.map(process_paths, paths_chunked)
+        data = [item for sublist in data_parallel for item in sublist]
+
+    save_data(data, out_dir)
+
+
+def save_data(data, out_dir):
+    df = pd.DataFrame(data, columns=['ASIGURATOR', "NUMAR POLITA", "CLASA B/M", "DATA EMITERE", "DATA EXPIRARE",
+                                     "NUME CLIENT", "NUMAR DE TELEFON", "TIP ASIGURARE", "NUMAR INMATRICULARE",
+                                     "PERIODA DE ASIGURARE", "VALOARE POLITA", "POLITA PDF"])
+    df["DATA EMITERE"] = df["DATA EMITERE"].astype("M8")
+    df["DATA EXPIRARE"] = df["DATA EXPIRARE"].astype("M8")
+    df["DATA EMITERE"] = df["DATA EMITERE"].dt.strftime("%d.%m.%y")
+    df["DATA EXPIRARE"] = df["DATA EXPIRARE"].dt.strftime("%d.%m.%y")
+    df = df.sort_values(by=['NUME CLIENT'], ignore_index=True)
+    df.to_csv(str(out_dir / 'db.csv'), index_label='NR.CRT', encoding='utf-8')
+
+
+def process_paths(paths: List[Path]):
+    print(current_process())
+    data = []
+    for pdf_path in paths:
+        with pdfplumber.open(pdf_path) as pdf:
+            processed = False
+            for extractor_key, extractor_cls in registry_map.items():
+                extractor = extractor_cls(pdf)
+                if extractor.is_match():
+                    processed = True
+                    print(f"{extractor_cls.__name__}:-> {str(pdf_path)}")
                     # NR.CRT
                     # ASIGURATOR
                     # NUMAR POLITA
@@ -49,32 +93,29 @@ def create_db(pdfs_dir: Path, out_dir: Path):
                     # TIP ASIGURARE
                     # NUMAR INMATRICULARE
                     # PERIODA DE ASIGURARE
-                    # VALOARE POLITA - prima de asigurare
+                    # VALOARE POLITA - prima de asigurare (totala)
                     # PDF
-                    start_date = extractor.get_start_date(text)
-                    expiration_date = extractor.get_expiration_date(text)
+                    start_date = extractor.get_start_date()
+                    expiration_date = extractor.get_expiration_date()
                     interval = diff_months(expiration_date, start_date)
 
-                    pdf_data = [extractor.get_insurer_short_name(), extractor.get_insurance_number(text),
-                                extractor.get_insurance_class(text),
-                                extractor.get_contract_date(text), expiration_date,
-                                extractor.get_person_name(text), None, extractor.get_type(),
-                                extractor.get_car_number(text), interval,
-                                extractor.get_insurance_amount(text), pdf_path.name]
+                    pdf_data = [extractor.get_insurer_short_name(), extractor.get_insurance_number(),
+                                extractor.get_insurance_class(),
+                                extractor.get_contract_date(), expiration_date,
+                                extractor.get_person_name(), None, extractor.get_type(),
+                                extractor.get_car_number(), interval,
+                                extractor.get_insurance_amount(), str(pdf_path)]
 
                     data.append(pdf_data)
+                    break
+            if not processed:
+                print(f"Unprocessed: {str(pdf_path)} - data extractor not found")
+                pdf_data = [f"Unprocessed {str(pdf_path)}", None, None, None, None, None, None, None, None, None, None,
+                            pdf_path.name]
+                data.append(pdf_data)
 
-    df = pd.DataFrame(data, columns=['ASIGURATOR', "NUMAR POLITA", "CLASA B/M", "DATA EMITERE", "DATA EXPIRARE",
-                                     "NUME CLIENT", "NUMAR DE TELEFON", "TIP ASIGURARE","NUMAR INMATRICULARE",
-                                     "PERIODA DE ASIGURARE", "VALOARE POLITA", "POLITA PDF"])
-    df["DATA EMITERE"] = df["DATA EMITERE"].astype("M8")
-    df["DATA EXPIRARE"] = df["DATA EXPIRARE"].astype("M8")
-
-    df["DATA EMITERE"] = df["DATA EMITERE"].dt.strftime("%d.%m.%y")
-    df["DATA EXPIRARE"] = df["DATA EXPIRARE"].dt.strftime("%d.%m.%y")
-
-    df.to_csv(str(out_dir / 'db.csv'), index_label='NR.CRT', encoding='utf-8')
+    return data
 
 
 if __name__ == '__main__':
-    create_db()
+    create_db_parallel()

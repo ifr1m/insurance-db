@@ -31,3 +31,7 @@ def get_car_number(text: str):
         return clean_text(match.group(1))
     else:
         return None
+
+
+def is_RCA(text: str):
+    return re.search(r'AUTO RCA', text) is not None
