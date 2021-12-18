@@ -109,13 +109,16 @@ def process_paths(paths: List[Path]):
                     data.append(pdf_data)
                     break
             if not processed:
+                print(extractor.text)
                 print(f"Unprocessed: {str(pdf_path)} - data extractor not found")
                 pdf_data = [f"Unprocessed {str(pdf_path)}", None, None, None, None, None, None, None, None, None, None,
                             pdf_path.name]
                 data.append(pdf_data)
 
     return data
-
+# 6	Unprocessed tricky-examples/polita-RO19A19PD21187837.pdf											polita-RO19A19PD21187837.pdf
+# 9	Unprocessed tricky-examples/polita-XZ010424610(1).pdf											polita-XZ010424610(1).pdf
+# 10Unprocessed tricky-examples/polita-RO05M3NP006540166.pdf											polita-RO05M3NP006540166.pdf
 
 if __name__ == '__main__':
-    create_db_parallel()
+    create_db()

@@ -5,7 +5,7 @@ setup(
     version='0.0.1rc2',
     packages=find_packages(include=['insurancedb', 'insurancedb.*']),
     url='',
-    install_requires=['pdfplumber==0.5.28', 'pandas', 'click>=8.0.1'],
+    install_requires=['pdfplumber==0.5.28', 'pandas', 'click>=8.0.1', 'pytesseract==0.3.8', 'pillow==8.4.0'],
     entry_points={
         'console_scripts': ['insurance-db=insurancedb.main:create_db_parallel']
     },
