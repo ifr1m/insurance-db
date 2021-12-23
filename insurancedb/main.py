@@ -119,6 +119,8 @@ def process_paths(paths: List[Path]):
 # 6	Unprocessed tricky-examples/polita-RO19A19PD21187837.pdf											polita-RO19A19PD21187837.pdf
 # 9	Unprocessed tricky-examples/polita-XZ010424610(1).pdf											polita-XZ010424610(1).pdf
 # 10Unprocessed tricky-examples/polita-RO05M3NP006540166.pdf											polita-RO05M3NP006540166.pdf
+# https://nanonets.com/blog/ocr-with-tesseract/
+#allianz, groupama are with cid problems
 
 if __name__ == '__main__':
     create_db()

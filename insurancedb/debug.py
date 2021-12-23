@@ -8,12 +8,12 @@ import pytesseract
 from pytesseract import Output
 import numpy as np
 
-from insurancedb.extractor_methods import get_pdf_page_image
+from insurancedb.extractor_methods import get_pdf_page_image, get_pdf_page_text, contains_unparsed_characters
 
 
 @click.command()
 @click.option('--pdf', type=click.Path(path_type=pathlib.Path))
-def debug(pdf: Path):
+def debug_ocr(pdf: Path):
     with pdfplumber.open(pdf) as pdf_file:
         custom_config = r'-l ron --psm 6'
         pil_img = get_pdf_page_image(pdf_file, 2)
@@ -29,6 +29,17 @@ def debug(pdf: Path):
 
         cv2.imshow('img', img)
         cv2.waitKey(0)
+
+@click.command()
+@click.option('--pdf', type=click.Path(path_type=pathlib.Path))
+def debug_unparsed_characters(pdf: Path):
+    for pth in pdf.rglob("*.pdf"):
+        with pdfplumber.open(pth) as pdf_file:
+            text = get_pdf_page_text(pdf_file, 0)
+            broken = contains_unparsed_characters(text)
+            if broken:
+                print(pth)
+
 
 
 if __name__ == '__main__':
