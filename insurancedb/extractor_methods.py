@@ -1,6 +1,8 @@
 import datetime
 import re
 
+import pdfplumber
+
 
 def clean_text(text: str):
     result = text.strip()
@@ -33,5 +35,17 @@ def get_car_number(text: str):
         return None
 
 
+def get_pdf_page_text(pdf: pdfplumber.PDF, page: int):
+    text = ""
+    if len(pdf.pages) >= page + 1:
+        pdf_page = pdf.pages[page]
+        text = pdf_page.extract_text()
+    return text
+
+
+def contains_unparsed_characters(text: str):
+    return re.search('\(cid:[0-9]{2,3}\)', text) is not None
+
+
 def is_RCA(text: str):
-    return re.search(r'AUTO RCA', text) is not None
+    return re.search(r'AUTO\s*RCA', text) is not None

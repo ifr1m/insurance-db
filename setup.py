@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='insurance-db',
-    version='0.0.1rc2',
+    version='0.0.2rc1',
     packages=find_packages(include=['insurancedb', 'insurancedb.*']),
     url='',
     install_requires=['pdfplumber==0.5.28', 'pandas', 'click>=8.0.1'],
