@@ -42,10 +42,6 @@ def get_car_number(text: str):
         return None
 
 
-def is_RCA(text: str):
-    return re.search(r'AUTO RCA', text) is not None
-
-
 def get_pdf_page_text(pdf: pdfplumber.PDF, page: int):
     text = ""
     if len(pdf.pages) >= page + 1:

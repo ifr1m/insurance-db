@@ -8,6 +8,7 @@ import pytesseract
 from pytesseract import Output
 import numpy as np
 
+from insurancedb.extractor import AsiromRcaExtractor
 from insurancedb.extractor_methods import get_pdf_page_image, get_pdf_page_text, contains_unparsed_characters
 
 
@@ -40,7 +41,15 @@ def debug_unparsed_characters(pdf: Path):
             if broken:
                 print(pth)
 
+@click.command()
+@click.option('--pdf', type=click.Path(path_type=pathlib.Path))
+def debug_extractor(pdf: Path):
+    with pdfplumber.open(pdf) as pdf_file:
+        extractor = AsiromRcaExtractor(pdf_file)
+        extractor.is_match()
+
+
 
 
 if __name__ == '__main__':
-    debug()
+    debug_extractor()

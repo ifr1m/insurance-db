@@ -36,7 +36,7 @@ def create_db(pdfs_dir: Path, out_dir: Path):
     if out_dir is None:
         out_dir = pdfs_dir
 
-    paths = list(pdfs_dir.glob("*.pdf"))
+    paths = list(pdfs_dir.rglob("*.pdf"))
     data = process_paths(paths)
 
     save_data(data, out_dir)
@@ -49,7 +49,7 @@ def create_db_parallel(pdfs_dir: Path, out_dir: Path):
     if out_dir is None:
         out_dir = pdfs_dir
 
-    paths = list(pdfs_dir.glob("*.pdf"))
+    paths = list(pdfs_dir.rglob("*.pdf"))
     paths_chunked = list(chunk_even_groups(paths, cpu_count()))
 
     with Pool(cpu_count()) as pool:
