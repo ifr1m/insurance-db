@@ -16,5 +16,6 @@ setup(
     description='insurance db from RO insurance pdf files'
 )
 
-# ImageMagick https://docs.wand-py.org/en/latest/guide/install.html#
-# tesseract https://digi.bib.uni-mannheim.de/tesseract/
+# ImageMagick https://docs.wand-py.org/en/latest/guide/install.html#  ImageMagick 7.1.0-16 Q16-HDRI
+# tesseract https://digi.bib.uni-mannheim.de/tesseract/ 5.0.1
+# https://www.ghostscript.com/releases/gsdnld.html 9.55.0
