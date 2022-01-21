@@ -10,12 +10,6 @@ import pdfplumber
 from insurancedb.extractor import registry_map
 from insurancedb.extractor_methods import diff_months
 
-from insurancedb.utils import get_project_root
-
-resources_dir = get_project_root() / "resources"
-
-print("Does ro-car-number-tess.patterns exists ? : " + str((resources_dir / "ro-car-number-tess.patterns").exists()))
-
 
 # this does not work wit parallel processing
 # def config_console_log():

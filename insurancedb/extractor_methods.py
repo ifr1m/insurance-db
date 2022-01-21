@@ -56,7 +56,7 @@ def get_ro_car_number_from_image(car_number_image_l):
     ro_car_number_tess_patterns_path = resources_dir / "ro-car-number-tess.patterns"
     car_number_image_l = add_margin(car_number_image_l, 10, 10, 10, 10, (255, 255, 255))
     return get_image_text_using_ocr(car_number_image_l,
-                                    ocr_config=r'--psm 7 --user-patterns ' + str(ro_car_number_tess_patterns_path))
+                                    ocr_config=r'-l eng --psm 7 --user-patterns ' + str(ro_car_number_tess_patterns_path))
 
 
 def get_pdf_page_text(pdf: pdfplumber.PDF, page: int):
