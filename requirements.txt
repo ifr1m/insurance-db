@@ -3,5 +3,7 @@ pandas
 click==8.0.1
 pytesseract==0.3.8
 pillow==8.4.0
+opencv-python>=4.5.5
+numpy
 
-opencv-python
+matplotlib

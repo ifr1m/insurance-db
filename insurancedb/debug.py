@@ -52,4 +52,4 @@ def debug_extractor(pdf: Path):
 
 
 if __name__ == '__main__':
-    debug_extractor()
+    debug_ocr()
