@@ -287,6 +287,8 @@ class GroupamaRcaExtractor(BaseRcaExtractor):
         self.amount_class_p = get_image_text_using_ocr(page_img.crop((193, 5211, 4788, 5313)))
         self.get_person_name_p = get_image_text_using_ocr(page_img.crop((954, 3945, 2728, 4114)))
         self.car_number_p = get_ro_car_number_from_image(page_img.crop((193, 1306, 1454, 1373)))
+        # TODO remove
+        print(self.car_number_p)
         self.insurance_number_p = remove_slashes(self.insurance_number_p)
 
     def is_match(self):
