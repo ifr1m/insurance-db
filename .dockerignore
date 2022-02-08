@@ -1,0 +1,9 @@
+.idea
+.idea/**/*
+venv
+venv/**/*
+*.egg-info
+*.egg-info/**/*
+.pytest_cache
+.pytest_cache/**/*
+Dockerfile

@@ -27,6 +27,10 @@ def clean_text(text: str):
     return result
 
 
+def remove_white_spaces(txt: str):
+    return re.sub(r'\s', "", txt)
+
+
 def get_date(text, regex):
     match = re.search(regex, text)
     if match:
@@ -45,9 +49,11 @@ def diff_months(end: datetime.date, start: datetime.date):
 
 
 def get_car_number(text: str):
-    match = re.search(r'([A-Z]{2}[0-9]{2}[A-Z]{3}|B[0-9]{2,3}[A-Z]{3})', text)
+    match = re.search(
+        r'((AB|AG|AR|BC|BH|BN|BR|BT|BV|BZ|CJ|CL|CS|CT|CV|DB|DJ|GJ|GL|GR|HD|HR|IF|IL|IS|MH|MM|MS|NT|OT|PH|SB|SJ|SM|SV|TL|TM|TR|VL|VN|VS)\s*[0-9]{2}\s*[A-Z]{3}|B\s*[0-9]{2,3}\s*[A-Z]{3})',
+        text)
     if match:
-        return clean_text(match.group(1))
+        return remove_white_spaces(clean_text(match.group(1)))
     else:
         return None
 
@@ -56,7 +62,8 @@ def get_ro_car_number_from_image(car_number_image_l):
     ro_car_number_tess_patterns_path = resources_dir / "ro-car-number-tess.patterns"
     car_number_image_l = add_margin(car_number_image_l, 10, 10, 10, 10, (255, 255, 255))
     return get_image_text_using_ocr(car_number_image_l,
-                                    ocr_config=r'-l eng --psm 7 --user-patterns ' + str(ro_car_number_tess_patterns_path))
+                                    ocr_config=r'-l eng --psm 7 --user-patterns ' + str(
+                                        ro_car_number_tess_patterns_path))
 
 
 def get_pdf_page_text(pdf: pdfplumber.PDF, page: int):
@@ -97,7 +104,7 @@ def get_pdf_page_image(pdf: pdfplumber.PDF, page: int, resolution=600):
     return img
 
 
-def contains_unparsed_characters(text: str):
+def contains_unparsable_characters(text: str):
     return re.search('\(cid:[0-9]{2,3}\)', text) is not None
 
 

@@ -1,119 +1,87 @@
+import logging
+import logging.config
+import logging.config
+import logging.handlers
 import pathlib
-from multiprocessing import Pool, cpu_count, current_process
+from logging import handlers
+from multiprocessing import Pool, Queue, Event, Process, cpu_count
 from pathlib import Path
-from typing import List
 
 import click
-import pandas as pd
-import pdfplumber
 
-from insurancedb.extractor import registry_map
-from insurancedb.extractor_methods import diff_months
+logger = logging.getLogger(__name__)
 
-
-# this does not work wit parallel processing
-# def config_console_log():
-#     log_formatter = logging.Formatter(
-#         "%(asctime)s [%(threadName)-12.12s] [%(name)-20.20s] [%(levelname)-5.5s]  %(message)s")
-#     root_logger = logging.getLogger()
-#     console_handler = logging.StreamHandler(sys.stdout)
-#     console_handler.setFormatter(log_formatter)
-#     root_logger.addHandler(console_handler)
-#     root_logger.setLevel(logging.INFO)
-#     logging.getLogger("pdfminer").setLevel(logging.WARNING)
+from insurancedb.file_processor import process_paths
+from insurancedb.exporters.file_exporter import to_csv
+from insurancedb.log.config import get_log_config, worker_log_initializer, get_dispatch_log_config
+from insurancedb.log.listener import listener_process
+from insurancedb.utils import chunk_even_groups
 
 
-def chunk_even_groups(lst, n_groups):
-    approx_sizes = len(lst) / n_groups
-    for i in range(n_groups):
-        yield lst[int(i * approx_sizes):int((i + 1) * approx_sizes)]
+def root_configurer(queue):
+    h = handlers.QueueHandler(queue)
+    root = logging.getLogger()
+    root.addHandler(h)
+    root.setLevel(logging.DEBUG)
 
 
-@click.command()
-@click.option('--pdfs_dir', type=click.Path(path_type=pathlib.Path))
-@click.option('--out_dir', type=click.Path(path_type=pathlib.Path), required=False)
-def create_db(pdfs_dir: Path, out_dir: Path):
+def create_db_serial(pdfs_dir: Path, out_dir: Path, root_logger_level: str, app_logger_level: str):
+    logging.config.dictConfig(get_log_config(root_logger_level=root_logger_level, app_logger_level=app_logger_level))
+    logger.info('Creating db in serial mode.')
     if out_dir is None:
         out_dir = pdfs_dir
 
     paths = list(pdfs_dir.rglob("*.pdf"))
     data = process_paths(paths)
 
-    save_data(data, out_dir)
+    to_csv(data, out_dir)
 
 
-@click.command()
-@click.option('--pdfs_dir', type=click.Path(path_type=pathlib.Path))
-@click.option('--out_dir', type=click.Path(path_type=pathlib.Path), required=False)
-def create_db_parallel(pdfs_dir: Path, out_dir: Path):
+def create_db_parallel(pdfs_dir: Path, out_dir: Path, root_logger_level: str, app_logger_level: str):
+    q = Queue()
+    worker_log_config = get_dispatch_log_config(q, root_logger_level=root_logger_level,
+                                                app_logger_level=app_logger_level)
+    worker_log_initializer(worker_log_config)
+
+    listener_log_config = get_log_config(root_logger_level=root_logger_level, app_logger_level=app_logger_level)
+    stop_event = Event()
+    lp = Process(target=listener_process, name='listener',
+                 args=(q, stop_event, listener_log_config))
+    lp.start()
+
+    # ----------------------------------------------------
+    logger.info('Creating db in multiprocessing mode.')
+
     if out_dir is None:
         out_dir = pdfs_dir
 
     paths = list(pdfs_dir.rglob("*.pdf"))
     paths_chunked = list(chunk_even_groups(paths, cpu_count()))
 
-    with Pool(cpu_count()) as pool:
+    with Pool(cpu_count(), initializer=worker_log_initializer, initargs=(worker_log_config,)) as pool:
         data_parallel = pool.map(process_paths, paths_chunked)
         data = [item for sublist in data_parallel for item in sublist]
 
-    save_data(data, out_dir)
+    to_csv(data, out_dir)
+    logger.info('Done')
+    # ----------------------------------------------------
+
+    stop_event.set()
+    lp.join()
 
 
-def save_data(data, out_dir):
-    df = pd.DataFrame(data, columns=['ASIGURATOR', "NUMAR POLITA", "CLASA B/M", "DATA EMITERE", "DATA EXPIRARE",
-                                     "NUME CLIENT", "NUMAR DE TELEFON", "TIP ASIGURARE", "NUMAR INMATRICULARE",
-                                     "PERIODA DE ASIGURARE", "VALOARE POLITA", "POLITA PDF"])
-    df["DATA EMITERE"] = df["DATA EMITERE"].astype("M8")
-    df["DATA EXPIRARE"] = df["DATA EXPIRARE"].astype("M8")
-    df["DATA EMITERE"] = df["DATA EMITERE"].dt.strftime("%d.%m.%y")
-    df["DATA EXPIRARE"] = df["DATA EXPIRARE"].dt.strftime("%d.%m.%y")
-    df = df.sort_values(by=['NUME CLIENT'], ignore_index=True)
-    df.to_csv(str(out_dir / 'db.csv'), index_label='NR.CRT', encoding='utf-8')
+@click.command()
+@click.argument('pdfs_dir', type=click.Path(path_type=pathlib.Path, exists=True), required=True)
+@click.option('--out_dir', type=click.Path(path_type=pathlib.Path, exists=True), required=False)
+@click.option('--parallel', type=bool, default=True, required=False)
+@click.option('--root_logger_level', default='WARN', show_default=True)
+@click.option('--app_logger_level', default='INFO', show_default=True)
+def create_db(pdfs_dir: Path, out_dir: Path, parallel: bool, root_logger_level: str, app_logger_level: str):
+    if parallel:
+        create_db_parallel(pdfs_dir, out_dir, root_logger_level, app_logger_level)
+    else:
+        create_db_serial(pdfs_dir, out_dir, root_logger_level, app_logger_level)
 
-
-def process_paths(paths: List[Path]):
-    print(current_process())
-    data = []
-    for pdf_path in paths:
-        with pdfplumber.open(pdf_path) as pdf:
-            processed = False
-            for extractor_key, extractor_cls in registry_map.items():
-                extractor = extractor_cls(pdf)
-                if extractor.is_match():
-                    processed = True
-                    print(f"{extractor_cls.__name__}:-> {str(pdf_path)}")
-                    # NR.CRT
-                    # ASIGURATOR
-                    # NUMAR POLITA
-                    # CLASA B/M
-                    # DATA EMITERE
-                    # DATA EXPIRARE
-                    # NUME CLIENT
-                    # NUMAR DE TELEFON
-                    # TIP ASIGURARE
-                    # NUMAR INMATRICULARE
-                    # PERIODA DE ASIGURARE
-                    # VALOARE POLITA - prima de asigurare (totala)
-                    # PDF
-                    start_date = extractor.get_start_date()
-                    expiration_date = extractor.get_expiration_date()
-                    interval = diff_months(expiration_date, start_date)
-
-                    pdf_data = [extractor.get_insurer_short_name(), extractor.get_insurance_number(),
-                                extractor.get_insurance_class(),
-                                extractor.get_contract_date(), expiration_date,
-                                extractor.get_person_name(), None, extractor.get_type(),
-                                extractor.get_car_number(), interval,
-                                extractor.get_insurance_amount(), str(pdf_path)]
-
-                    data.append(pdf_data)
-                    break
-            if not processed:
-                pdf_data = [f"Unprocessed {str(pdf_path)}", None, None, None, None, None, None, None, None, None, None,
-                            pdf_path.name]
-                data.append(pdf_data)
-
-    return data
 
 if __name__ == '__main__':
-    create_db_parallel()
+    create_db()
