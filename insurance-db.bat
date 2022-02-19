@@ -2,9 +2,9 @@
 call :lastarg %*
 
 IF exist "%LAST_ARG%" (
-	docker run -it --rm -v "%LAST_ARG%":"/workspace" ifrim/insurance-db:ocr-test-8 insurance-db %ALL_BUT_LAST% /workspace
+	docker run -it --rm -v "%LAST_ARG%":"/workspace" ifrim/insurance-db:0.1.0 insurance-db %ALL_BUT_LAST% /workspace
 ) ELSE (
-	docker run -it --rm ifrim/insurance-db:ocr-test-8 insurance-db "%*"
+	docker run -it --rm ifrim/insurance-db:0.1.0 insurance-db "%*"
 )
 
 :lastarg

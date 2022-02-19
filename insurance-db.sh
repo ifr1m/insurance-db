@@ -1,7 +1,7 @@
 #!/bin/bash
 last=${@:-1}
 if [[ -d "$last" ]]; then
-  docker run -it --rm -v "$last":"$last" ifrim/insurance-db:ocr-test-8 insurance-db "${@}"
+  docker run -it --rm -v "$last":"$last" ifrim/insurance-db:0.1.0 insurance-db "${@}"
 else
-  docker run -it --rm  ifrim/insurance-db:ocr-test-8 insurance-db "${@}"
+  docker run -it --rm  ifrim/insurance-db:0.1.0 insurance-db "${@}"
 fi
