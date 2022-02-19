@@ -17,7 +17,7 @@ def process_paths(paths: List[Path]):
         with pdfplumber.open(pdf_path) as pdf:
             processed = False
             for extractor_key, extractor_cls in extractors_registry_map.items():
-                extractor = extractor_cls(pdf)
+                extractor = extractor_cls(pdf_path.name, pdf)
                 if extractor.is_match():
                     processed = True
                     logger.info("%s :-> %s", extractor_cls.__name__, {str(pdf_path)})

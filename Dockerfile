@@ -7,6 +7,7 @@ ARG IM_VERSION=7.1.0-16
 ARG LIB_HEIF_VERSION=1.12.0
 ARG LIB_AOM_VERSION=3.2.0
 ARG LIB_WEBP_VERSION=1.2.1
+ARG GS_VERSION=9.55.0
 
 RUN apt-get -y update && \
     apt-get -y upgrade && \
@@ -16,7 +17,13 @@ RUN apt-get -y update && \
     # libheif
     libde265-0 libde265-dev libjpeg62-turbo libjpeg62-turbo-dev x265 libx265-dev libtool \
     # IM
-    libpng16-16 libpng-dev libjpeg62-turbo libjpeg62-turbo-dev libgomp1 ghostscript libxml2-dev libxml2-utils libtiff-dev libfontconfig1-dev libfreetype6-dev && \
+    libpng16-16 libpng-dev libjpeg62-turbo libjpeg62-turbo-dev libgomp1 libxml2-dev libxml2-utils libtiff-dev libfontconfig1-dev libfreetype6-dev && \
+    #Building ghostscript
+    curl -L https://github.com/ArtifexSoftware/ghostpdl-downloads/releases/download/gs9550/ghostscript-${GS_VERSION}.tar.gz -o ghostscript.tar.gz && \
+    tar -xzvf ghostscript.tar.gz && cd ghostscript-${GS_VERSION}/ &&  \
+    ./configure && make && make install && \
+    ldconfig /usr/local/lib && \
+    cd ../ && rm -rf ghostscript-${GS_VERSION} && rm ghostscript.tar.gz &&\
     # Building libwebp
     git clone https://chromium.googlesource.com/webm/libwebp && \
     cd libwebp && git checkout v${LIB_WEBP_VERSION} && \
@@ -51,7 +58,7 @@ RUN apt-get -y update && \
 
     # Update and install depedencies
 RUN apt-get update && \
-    apt-get install -y wget unzip bc vim python3-pip libleptonica-dev git
+    apt-get install -y wget unzip bc libleptonica-dev
 
 # Packages to complie Tesseract
 RUN apt-get install -y --reinstall make && \
@@ -59,7 +66,8 @@ RUN apt-get install -y --reinstall make && \
      libpng-dev libjpeg62-turbo-dev libtiff5-dev libicu-dev \
      libpango1.0-dev autoconf-archive ffmpeg libsm6 libxext6
 
-RUN apt-get install -y poppler-utils
+
+#RUN apt-get install -y poppler-utils
 # Set working directory
 WORKDIR /app
 
@@ -69,7 +77,10 @@ RUN mkdir src && cd /app/src && \
     cd /app/src/tesseract-5.0.1 && ./autogen.sh && ./configure && make && make install && ldconfig && \
     make training && make training-install
 RUN cd /usr/local/share/tessdata && wget https://github.com/tesseract-ocr/tessdata_fast/blob/main/eng.traineddata?raw=true -O eng.traineddata \
-    && wget https://github.com/tesseract-ocr/tessdata_fast/blob/main/ron.traineddata?raw=true -O ron.traineddata
+    && wget https://github.com/tesseract-ocr/tessdata_fast/blob/main/ron.traineddata?raw=true -O ron.traineddata && \
+    apt-get remove --autoremove --purge -y wget unzip make g++ autoconf automake libtool pkg-config \
+     libpng-dev libjpeg62-turbo-dev libtiff5-dev libicu-dev \
+     libpango1.0-dev autoconf-archive
 
 # Setting the data prefix
 ENV TESSDATA_PREFIX=/usr/local/share/tessdata
@@ -96,5 +107,5 @@ ENTRYPOINT ["./entrypoint.sh"]
 CMD ["insurance-db"]
 
 
-#docker build --target test -t insurance-db:test .
-#docker build -t insurance-db:0.0.2.
+#      docker build --target test -t insurance-db:test .
+#      docker build -t insurance-db:0.0.2.

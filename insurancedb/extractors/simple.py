@@ -4,17 +4,24 @@ from dataclasses import dataclass
 import pdfplumber
 
 from insurancedb.extractors.base import BaseRcaExtractor
-from insurancedb.extractors.registry import extractor_register
 from insurancedb.extractors.extractor_methods import get_pdf_page_text, is_RCA, clean_text, get_date, get_car_number
+from insurancedb.extractors.registry import extractor_register
 
 
 @extractor_register
 @dataclass
 class EuroInsRcaExtractor(BaseRcaExtractor):
+    file_name: str
     pdf: pdfplumber.PDF = None
 
     def __post_init__(self):
-        self.text = get_pdf_page_text(self.pdf, 0)
+        self.text = ""
+        if self._is_file_name_matching():
+            self.text = get_pdf_page_text(self.pdf, 0)
+
+    def _is_file_name_matching(self):
+        return re.search(self.get_insurer_short_name(), self.file_name, re.IGNORECASE) is not None or \
+               re.search("RO16H16DV", self.file_name, re.IGNORECASE) is not None
 
     def is_match(self):
         is_rca = is_RCA(self.text)
@@ -74,10 +81,17 @@ class EuroInsRcaExtractor(BaseRcaExtractor):
 @dataclass
 @extractor_register
 class CityInsuranceRcaExtractor(BaseRcaExtractor):
+    file_name: str
     pdf: pdfplumber.PDF = None
 
     def __post_init__(self):
-        self.text = get_pdf_page_text(self.pdf, 0)
+        self.text = ""
+        if self._is_file_name_matching():
+            self.text = get_pdf_page_text(self.pdf, 0)
+
+    def _is_file_name_matching(self):
+        return re.search(self.get_insurer_short_name(), self.file_name, re.IGNORECASE) is not None or \
+               re.search("RO25C25HP", self.file_name, re.IGNORECASE) is not None
 
     def get_expiration_date(self):
         return get_date(self.text, r'pana la(.*)/(.*)/(.*)Contract')
@@ -137,6 +151,7 @@ class CityInsuranceRcaExtractor(BaseRcaExtractor):
 @dataclass
 @extractor_register
 class GraweRcaExtractor(BaseRcaExtractor):
+    file_name: str
     pdf: pdfplumber.PDF = None
 
     def __post_init__(self):
@@ -201,10 +216,17 @@ class GraweRcaExtractor(BaseRcaExtractor):
 @extractor_register
 @dataclass
 class AsiromRcaExtractor(BaseRcaExtractor):
+    file_name: str
     pdf: pdfplumber.PDF = None
 
     def __post_init__(self):
-        self.text = get_pdf_page_text(self.pdf, 0)
+        self.text = ""
+        if self._is_file_name_matching():
+            self.text = get_pdf_page_text(self.pdf, 0)
+
+    def _is_file_name_matching(self):
+        return re.search(self.get_insurer_short_name(), self.file_name, re.IGNORECASE) is not None or \
+               re.search("XZ", self.file_name, re.IGNORECASE) is not None
 
     def is_match(self):
         is_rca = is_RCA(self.text)
@@ -264,10 +286,17 @@ class AsiromRcaExtractor(BaseRcaExtractor):
 @extractor_register
 @dataclass
 class GeneraliRcaExtractor(BaseRcaExtractor):
+    file_name: str
     pdf: pdfplumber.PDF = None
 
     def __post_init__(self):
-        self.text = get_pdf_page_text(self.pdf, 4)
+        self.text = ""
+        if self._is_file_name_matching():
+            self.text = get_pdf_page_text(self.pdf, 4)
+
+    def _is_file_name_matching(self):
+        return re.search(self.get_insurer_short_name(), self.file_name, re.IGNORECASE) is not None or \
+               re.search("RO05M3NP", self.file_name, re.IGNORECASE) is not None
 
     def is_match(self):
         is_rca = is_RCA(self.text)
@@ -327,6 +356,7 @@ class GeneraliRcaExtractor(BaseRcaExtractor):
 @extractor_register
 @dataclass
 class OmniasigRcaExtractor(BaseRcaExtractor):
+    file_name: str
     pdf: pdfplumber.PDF = None
 
     def __post_init__(self):

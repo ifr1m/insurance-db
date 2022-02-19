@@ -4,14 +4,14 @@ from dataclasses import dataclass
 
 import cv2 as cv
 import numpy as np
-
 import pdfplumber
 
 from insurancedb.extractors.base import BaseRcaExtractor
-from insurancedb.extractors.registry import extractor_register
-from insurancedb.extractors.extractor_methods import get_pdf_page_image, get_image_text_using_ocr, get_image_digits_using_ocr, \
+from insurancedb.extractors.extractor_methods import get_pdf_page_image, get_image_text_using_ocr, \
+    get_image_digits_using_ocr, \
     get_ro_car_number_from_image, remove_slashes, is_RCA, clean_text, get_date, get_car_number, \
     find_position_of_template, to_opencv
+from insurancedb.extractors.registry import extractor_register
 from insurancedb.utils import get_project_root
 
 resources_dir = get_project_root() / "resources"
@@ -20,6 +20,7 @@ resources_dir = get_project_root() / "resources"
 @dataclass
 @extractor_register
 class AxeriaRcaExtractor(BaseRcaExtractor):
+    file_name: str
     pdf: pdfplumber.PDF = None
 
     def __post_init__(self):
@@ -32,19 +33,21 @@ class AxeriaRcaExtractor(BaseRcaExtractor):
         self.start_end_l = empty
         self.person_name_l = empty
         self.car_number_l = empty
-        self.is_matching = False
+        self.is_matching = self._is_file_name_matching()
 
         pages = [2]
-        for page in pages:
-            page_img = get_pdf_page_image(self.pdf, page)
-            if page_img is not None:
-                self.contract_name_l = get_image_text_using_ocr(page_img.crop((140, 3631, 2931, 3730)))
-                self.insurer_name_l = get_image_text_using_ocr(page_img.crop((140, 3917, 2011, 4005)))
-                self.is_matching = self._is_match()
-                if self.is_matching:
-                    self._continue_extracting(page_img)
-                    self._log_extracted_values()
-                    break
+
+        if self.is_matching:
+            for page in pages:
+                page_img = get_pdf_page_image(self.pdf, page)
+                if page_img is not None:
+                    self.contract_name_l = get_image_text_using_ocr(page_img.crop((140, 3631, 2931, 3730)))
+                    self.insurer_name_l = get_image_text_using_ocr(page_img.crop((140, 3917, 2011, 4005)))
+                    self.is_matching = self._is_page_matching()
+                    if self.is_matching:
+                        self._continue_extracting(page_img)
+                        self._log_extracted_values()
+                        break
 
     def _continue_extracting(self, page_img):
         self.insurance_number_l = get_image_digits_using_ocr(page_img.crop((1598, 1111, 2761, 1325)))
@@ -63,9 +66,13 @@ class AxeriaRcaExtractor(BaseRcaExtractor):
     def is_match(self):
         return self.is_matching
 
-    def _is_match(self):
+    def _is_page_matching(self):
         is_rca = is_RCA(self.contract_name_l)
         return is_rca and self.get_insurer_name() == "AXERIA IARD"
+
+    def _is_file_name_matching(self):
+        return re.search(self.get_insurer_short_name(), self.file_name, re.IGNORECASE) is not None or \
+               re.search("RO31N31JT", self.file_name, re.IGNORECASE) is not None
 
     def get_insurer_short_name(self):
         return "AXERIA"
@@ -120,6 +127,7 @@ class AxeriaRcaExtractor(BaseRcaExtractor):
 @dataclass
 @extractor_register
 class AllianzRcaExtractor(BaseRcaExtractor):
+    file_name: str
     pdf: pdfplumber.PDF = None
 
     def __post_init__(self):
@@ -134,24 +142,27 @@ class AllianzRcaExtractor(BaseRcaExtractor):
         self.start_end_l = empty
         self.person_name_l = empty
         self.car_number_l = empty
-        self.is_matching = False
+        self.is_matching = self._is_file_name_matching()
 
         pages = [0, 2]
-        for page in pages:
-            page_img = get_pdf_page_image(self.pdf, page)
-            if page_img is not None:
-                insurer_nm_bbox = find_position_of_template(to_opencv(page_img), cv.imread(
-                    str(resources_dir / "insurer_nm_allianz.png")))
-                if not insurer_nm_bbox.empty:
-                    self.anchors["insurer-nm-allianz"] = (insurer_nm_bbox.iloc[0][0], insurer_nm_bbox.iloc[0][1])
-                    crop_points_dict = self._get_crop_points_dict()
-                    self.contract_name_l = get_image_text_using_ocr(page_img.crop(crop_points_dict["contract_name_l"]))  #
-                    self.insurer_name_l = get_image_text_using_ocr(page_img.crop(crop_points_dict["insurer_name_l"]))
-                    self.is_matching = self._is_match()
-                    if self.is_matching:
-                        self._continue_extracting(page_img, crop_points_dict)
-                        self._log_extracted_values()
-                        break
+        if self.is_matching:
+            for page in pages:
+                page_img = get_pdf_page_image(self.pdf, page)
+                if page_img is not None:
+                    insurer_nm_bbox = find_position_of_template(to_opencv(page_img), cv.imread(
+                        str(resources_dir / "insurer_nm_allianz.png")))
+                    if not insurer_nm_bbox.empty:
+                        self.anchors["insurer-nm-allianz"] = (insurer_nm_bbox.iloc[0][0], insurer_nm_bbox.iloc[0][1])
+                        crop_points_dict = self._get_crop_points_dict()
+                        self.contract_name_l = get_image_text_using_ocr(
+                            page_img.crop(crop_points_dict["contract_name_l"]))  #
+                        self.insurer_name_l = get_image_text_using_ocr(
+                            page_img.crop(crop_points_dict["insurer_name_l"]))
+                        self.is_matching = self._is_page_matching()
+                        if self.is_matching:
+                            self._continue_extracting(page_img, crop_points_dict)
+                            self._log_extracted_values()
+                            break
 
     def _get_crop_points_dict(self):
         relative_crop_points = np.array([[-4, -100, 2712, 10],  # contract_name_l / insurer-nm-allianz
@@ -196,7 +207,11 @@ class AllianzRcaExtractor(BaseRcaExtractor):
     def is_match(self):
         return self.is_matching
 
-    def _is_match(self):
+    def _is_file_name_matching(self):
+        return re.search(self.get_insurer_short_name(), self.file_name, re.IGNORECASE) is not None \
+               or re.search("RO07R7YD", self.file_name, re.IGNORECASE) is not None
+
+    def _is_page_matching(self):
         is_rca = is_RCA(self.contract_name_l)
         return is_rca and self.get_insurer_name() == "ALLIANZ - ŢIRIAC ASIGURĂRI"
 
@@ -253,6 +268,7 @@ class AllianzRcaExtractor(BaseRcaExtractor):
 @dataclass
 @extractor_register
 class GroupamaRcaExtractor(BaseRcaExtractor):
+    file_name: str
     pdf: pdfplumber.PDF = None
 
     def __post_init__(self):
@@ -265,18 +281,20 @@ class GroupamaRcaExtractor(BaseRcaExtractor):
         self.start_end_l = empty
         self.person_name_l = empty
         self.car_number_l = empty
-        self.is_matching = False
+        self.is_matching = self._is_file_name_matching()
+
         pages = [0]
-        for page in pages:
-            page_img = get_pdf_page_image(self.pdf, page)
-            if page_img is not None:
-                self.contract_name_l = get_image_text_using_ocr(page_img.crop((193, 3507, 2182, 3607)))
-                self.insurer_name_l = get_image_text_using_ocr(page_img.crop((193, 3609, 1450, 3702)))
-                self.is_matching = self._is_match()
-                if self.is_matching:
-                    self._continue_extracting(page_img)
-                    self._log_extracted_values()
-                    break
+        if self.is_matching:
+            for page in pages:
+                page_img = get_pdf_page_image(self.pdf, page)
+                if page_img is not None:
+                    self.contract_name_l = get_image_text_using_ocr(page_img.crop((193, 3507, 2182, 3607)))
+                    self.insurer_name_l = get_image_text_using_ocr(page_img.crop((193, 3609, 1450, 3702)))
+                    self.is_matching = self._is_page_matching()
+                    if self.is_matching:
+                        self._continue_extracting(page_img)
+                        self._log_extracted_values()
+                        break
 
     def _continue_extracting(self, page_img):
         self.insurance_number_l = get_image_digits_using_ocr(page_img.crop((1476, 996, 2544, 1122)))
@@ -285,8 +303,6 @@ class GroupamaRcaExtractor(BaseRcaExtractor):
         self.person_name_l = get_image_text_using_ocr(page_img.crop((954, 3945, 2728, 4114)))
         self.car_number_l = get_ro_car_number_from_image(page_img.crop((193, 1306, 1454, 1373)))
         self.insurance_number_l = remove_slashes(self.insurance_number_l)
-
-
 
     def _log_extracted_values(self):
         self.logger.debug(
@@ -297,7 +313,11 @@ class GroupamaRcaExtractor(BaseRcaExtractor):
     def is_match(self):
         return self.is_matching
 
-    def _is_match(self):
+    def _is_file_name_matching(self):
+        return re.search(self.get_insurer_short_name(), self.file_name, re.IGNORECASE) is not None or \
+               re.search("RO19A19PD", self.file_name, re.IGNORECASE) is not None
+
+    def _is_page_matching(self):
         is_rca = is_RCA(self.contract_name_l)
         return is_rca and self.get_insurer_name() == "GROUPAMA ASIGURĂRI"
 
